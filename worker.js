@@ -117,6 +117,17 @@ function getFamily(nd) {
   return getNameStr(nd, 1, 3, 0x0409) || getNameStr(nd, 1, 1, 0) || '?';
 }
 
+function getNameInfo(nd) {
+  return {
+    family: getNameStr(nd, 1, 3, 0x0409) || getNameStr(nd, 1, 1, 0) || '',
+    subfamily: getNameStr(nd, 2, 3, 0x0409) || getNameStr(nd, 2, 1, 0) || '',
+    copyright: getNameStr(nd, 0, 3, 0x0409) || getNameStr(nd, 0, 1, 0) || '',
+    version: getNameStr(nd, 5, 3, 0x0409) || getNameStr(nd, 5, 1, 0) || '',
+    designer: getNameStr(nd, 9, 3, 0x0409) || getNameStr(nd, 9, 1, 0) || '',
+    license: getNameStr(nd, 13, 3, 0x0409) || getNameStr(nd, 13, 1, 0) || '',
+  };
+}
+
 function modifyOS2(d, weight, fsType) {
   const c = new Uint8Array(d.length);
   c.set(d);
@@ -180,8 +191,10 @@ function pickSource(sources, targetWeight, mode) {
 
 function loadSource(buf) {
   const sources = new Map();
+  let metaLogged = false;
   if (isTTC(buf)) {
     const ttc = parseTTC(buf);
+    log('info', `  TTC 包含 ${ttc.numFonts} 个子字体`);
     const hasPub = ttc.offsets.some(off => {
       const s = parseSFNT(buf, off);
       const nr = s.tables.find(t => t.tag === 'name');
@@ -195,6 +208,14 @@ function loadSource(buf) {
       const nd = sliceTable(buf, nameRec);
       const fam = getFamily(nd);
       if (hasPub && fam.startsWith('.')) continue;
+      if (!metaLogged) {
+        const info = getNameInfo(nd);
+        if (info.family) log('info', `  字体名称: ${info.family}`);
+        if (info.designer) log('info', `  设计师: ${info.designer}`);
+        if (info.version) log('info', `  版本: ${info.version}`);
+        if (info.copyright) log('info', `  版权: ${info.copyright.substring(0, 80)}`);
+        metaLogged = true;
+      }
       const cat = classifyWeight(getSubfamily(nd));
       if (!sources.has(cat)) {
         sources.set(cat, {
@@ -205,6 +226,16 @@ function loadSource(buf) {
     }
   } else {
     const sfnt = parseSFNT(buf, 0);
+    const nameRec = sfnt.tables.find(t => t.tag === 'name');
+    if (nameRec) {
+      const nd = sliceTable(buf, nameRec);
+      const info = getNameInfo(nd);
+      if (info.family) log('info', `  字体名称: ${info.family}`);
+      if (info.subfamily) log('info', `  子族: ${info.subfamily}`);
+      if (info.designer) log('info', `  设计师: ${info.designer}`);
+      if (info.version) log('info', `  版本: ${info.version}`);
+      if (info.copyright) log('info', `  版权: ${info.copyright.substring(0, 80)}`);
+    }
     const fontData = {
       sfVersion: sfnt.sfVersion,
       tables: sfnt.tables.map(t => ({ tag: t.tag, data: sliceTable(buf, t) })),
@@ -287,6 +318,36 @@ function buildTTC(fonts) {
   return result;
 }
 
+function buildSFNT(font) {
+  const nt = font.tables.length;
+  const sorted = font.tables.slice().sort((a, b) => a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0);
+  let off = 12 + 16 * nt;
+  const tableOffsets = [];
+  for (const t of sorted) {
+    tableOffsets.push(off);
+    off += align4(t.data.length);
+  }
+  const buf = new ArrayBuffer(off);
+  const dv = new DataView(buf);
+  const bytes = new Uint8Array(buf);
+  writeU32(dv, 0, font.sfVersion);
+  writeU16(dv, 4, nt);
+  let p2 = 1, lg = 0;
+  while (p2 * 2 <= nt) { p2 *= 2; lg++; }
+  writeU16(dv, 6, p2 * 16);
+  writeU16(dv, 8, lg);
+  writeU16(dv, 10, nt * 16 - p2 * 16);
+  for (let i = 0; i < nt; i++) {
+    const r = 12 + i * 16;
+    writeTag(dv, r, sorted[i].tag);
+    writeU32(dv, r + 4, calcChecksum(sorted[i].data));
+    writeU32(dv, r + 8, tableOffsets[i]);
+    writeU32(dv, r + 12, sorted[i].data.length);
+  }
+  for (let i = 0; i < nt; i++) bytes.set(sorted[i].data, tableOffsets[i]);
+  return buf;
+}
+
 function convertOne(sources, mode) {
   log('info', `  映射配置: ${mode}, 开始组装数据结构...`);
   const fonts = [];
@@ -313,18 +374,34 @@ function convertOne(sources, mode) {
     fonts.push({ sfVersion: src.sfVersion, tables });
     if ((i + 1) % 50 === 0) log('info', `  构建变体进度: ${Math.floor((i + 1) / TEMPLATES.length * 100)}% ...`);
   }
+  return fonts;
+}
+
+function convertToTTC(fonts) {
   log('info', `  执行二进制打包 (引用级查重优化)...`);
   return buildTTC(fonts);
+}
+
+function convertToTTFs(fonts) {
+  log('info', `  拆分为独立 TTF 文件...`);
+  return fonts.map(f => buildSFNT(f));
+}
+
+function applyTemplate(tpl, fontName) {
+  return tpl.replace(/\$\{fontName\}/g, fontName);
 }
 
 self.onmessage = function(e) {
   const { type } = e.data;
   if (type === 'convert') {
     try {
-      const { srcFiles, mode } = e.data;
+      const { srcFiles, mode, compatLayer, outputFormat, outputTemplate } = e.data;
+      const isLegacy = compatLayer === 'ios9';
+      const isTTF = outputFormat === 'ttf';
       const fams = new Set();
       for (const t of TEMPLATES) fams.add(t.family);
-      log('info', `环境就绪: 支持 iOS 18 协议, 覆盖 ${fams.size} 个字体族`);
+      log('info', `环境就绪: 覆盖 ${fams.size} 个字体族`);
+      log('info', `兼容层: ${isLegacy ? 'iOS 9-17' : 'iOS 18-26'} | 输出: ${isTTF ? 'TTF' : 'TTC'}`);
 
       const total = srcFiles.length;
       for (let si = 0; si < total; si++) {
@@ -335,14 +412,26 @@ self.onmessage = function(e) {
         const sources = loadSource(buffer);
         log('info', `  检测到字重: ${[...sources.keys()].join(', ')}`);
 
-        const result = convertOne(sources, mode);
-
+        const fonts = convertOne(sources, mode);
         const stem = name.replace(/\.[^.]+$/, '');
-        const outName = stem + 'UI.ttc';
-        const sizeMB = (result.byteLength / 1048576).toFixed(1);
-        log('ok', `  封装成功: ${desensitize(outName)} (${sizeMB} MB)`);
+        const outStem = applyTemplate(outputTemplate || '${fontName}UI', stem);
 
-        self.postMessage({ type: 'result', name: outName, buffer: result }, [result]);
+        if (isTTF) {
+          const ttfs = convertToTTFs(fonts);
+          for (let ti = 0; ti < ttfs.length; ti++) {
+            const tpl = TEMPLATES[ti];
+            const ttfName = `${tpl.family}.ttf`;
+            self.postMessage({ type: 'result', name: ttfName, buffer: ttfs[ti] }, [ttfs[ti]]);
+            if ((ti + 1) % 50 === 0) log('info', `  输出进度: ${Math.floor((ti + 1) / ttfs.length * 100)}%`);
+          }
+          log('ok', `  拆分完成: ${ttfs.length} 个 TTF`);
+        } else {
+          const result = convertToTTC(fonts);
+          const outName = outStem + '.ttc';
+          const sizeMB = (result.byteLength / 1048576).toFixed(1);
+          log('ok', `  封装成功: ${desensitize(outName)} (${sizeMB} MB)`);
+          self.postMessage({ type: 'result', name: outName, buffer: result }, [result]);
+        }
         self.postMessage({ type: 'progress', current: si + 1, total });
       }
 

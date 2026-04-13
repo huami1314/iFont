@@ -41,6 +41,24 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .mode-text small { font-size: 10px; font-weight: 400; opacity: 0.7; margin-top: 4px; line-height: 1.2; }
 .mode-label input:checked + .mode-text { border-color: var(--text); color: var(--text); background: rgba(255,255,255,0.05); }
 
+.settings-toggle { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; padding: 0 12px; cursor: pointer; font-size: 13px; color: var(--text2); transition: color 0.2s; }
+.settings-toggle:hover { color: var(--text); }
+.settings-toggle .arrow { font-size: 10px; transition: transform 0.3s; }
+.settings-toggle.open .arrow { transform: rotate(90deg); }
+.settings-panel { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, margin-bottom 0.3s ease-out; margin-bottom: 0; }
+.settings-panel.open { max-height: 160px; margin-bottom: 24px; }
+.settings-inner { padding: 0 12px; }
+.setting-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.setting-label { font-size: 12px; color: var(--text2); white-space: nowrap; min-width: 70px; }
+.setting-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 13px; font-family: 'SF Mono', monospace; outline: none; transition: border-color 0.2s; }
+.setting-input:focus { border-color: var(--border-hover); }
+.setting-input::placeholder { color: var(--text3); }
+.format-options { display: flex; gap: 8px; flex: 1; }
+.format-label { flex: 1; position: relative; cursor: pointer; }
+.format-label input { position: absolute; opacity: 0; }
+.format-text { display: block; text-align: center; padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text2); transition: all 0.2s; }
+.format-label input:checked + .format-text { border-color: var(--text); color: var(--text); background: rgba(255,255,255,0.05); }
+
 .convert-btn { width: 100%; padding: 18px; border: 1px solid var(--text); border-radius: 14px; background: transparent; color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; letter-spacing: 1px; position: relative; overflow: hidden; margin-bottom: 24px; }
 .convert-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
 .convert-btn:active:not(:disabled) { transform: scale(0.98); }
@@ -94,7 +112,7 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
     <div class="upload-box" id="src-box">
       <div class="title">加载源字体</div>
       <div class="hint">选取你的自定义字体 (支持多选)</div>
-      <input type="file" id="src-input" accept=".ttf,.otf,.ttc,.TTF,.OTF,.TTC,font/ttf,font/otf,font/sfnt,font/collection,.woff,.woff2" multiple>
+      <input type="file" id="src-input" multiple>
       <div class="file-info" id="src-info"></div>
     </div>
   </div>
@@ -117,7 +135,45 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
     </div>
   </div>
 
-  <button class="convert-btn" id="convert-btn" disabled>START</button>
+  <div class="settings-toggle" id="settings-toggle">
+    <span class="arrow">▶</span> 更多设置
+  </div>
+  <div class="settings-panel" id="settings-panel">
+    <div class="settings-inner">
+      <div class="setting-row">
+        <span class="setting-label">输出名称</span>
+        <input class="setting-input" id="output-tpl" type="text" placeholder="${fontName}UI">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">兼容配置</span>
+        <div class="format-options">
+          <label class="format-label">
+            <input type="radio" name="compat-layer" value="ios18" checked>
+            <span class="format-text">iOS 18-26</span>
+          </label>
+          <label class="format-label">
+            <input type="radio" name="compat-layer" value="ios9">
+            <span class="format-text">iOS 9-17</span>
+          </label>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">输出格式</span>
+        <div class="format-options">
+          <label class="format-label">
+            <input type="radio" name="output-format" value="ttc" checked>
+            <span class="format-text">TTC</span>
+          </label>
+          <label class="format-label">
+            <input type="radio" name="output-format" value="ttf">
+            <span class="format-text">TTF</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" class="convert-btn" id="convert-btn" disabled>START</button>
 
   <div class="progress-wrap" id="progress-wrap">
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
@@ -129,7 +185,7 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 
   <div class="results" id="results"></div>
   <div class="dl-all-wrap" id="dl-all-wrap">
-    <button class="dl-all-btn" id="dl-all-btn">下载全部</button>
+    <button type="button" class="dl-all-btn" id="dl-all-btn">下载全部</button>
   </div>
 
   <div class="footer">
@@ -157,12 +213,25 @@ let srcFiles = [];
 let resultBlobs = [];
 let worker = null;
 
+const ALLOWED_EXT = ['ttf', 'otf', 'ttc'];
 const $ = s => document.querySelector(s);
 const srcBox = $('#src-box'), srcInput = $('#src-input'), srcInfo = $('#src-info');
 const convertBtn = $('#convert-btn');
 const progressWrap = $('#progress-wrap'), progressFill = $('#progress-fill');
 const logPanel = $('#log-panel'), logScroll = $('#log-scroll');
 const resultsDiv = $('#results'), dlAllWrap = $('#dl-all-wrap'), dlAllBtn = $('#dl-all-btn');
+const outputTpl = $('#output-tpl');
+const settingsToggle = $('#settings-toggle'), settingsPanel = $('#settings-panel');
+
+settingsToggle.addEventListener('click', () => {
+  settingsToggle.classList.toggle('open');
+  settingsPanel.classList.toggle('open');
+});
+
+outputTpl.value = localStorage.getItem('iFont_outputTpl') || '';
+outputTpl.addEventListener('input', () => {
+  localStorage.setItem('iFont_outputTpl', outputTpl.value);
+});
 
 function setupDrop(box, input, onFiles) {
   ['dragenter','dragover'].forEach(e => box.addEventListener(e, ev => { ev.preventDefault(); box.classList.add('drag-over'); }));
@@ -173,14 +242,29 @@ function setupDrop(box, input, onFiles) {
 
 setupDrop(srcBox, srcInput, async files => {
   srcFiles = [];
+  let rejected = [];
   for (const f of files) {
-    srcFiles.push({ name: f.name, buffer: await f.arrayBuffer() });
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (ALLOWED_EXT.includes(ext)) {
+      srcFiles.push({ name: f.name, buffer: await f.arrayBuffer() });
+    } else {
+      rejected.push(f.name);
+    }
   }
-  const names = srcFiles.map(f => f.name);
-  srcInfo.innerHTML = names.length > 1
-    ? `<span class="file-count">${names.length} files</span> ${names.slice(0, 2).join(', ')}...`
-    : names.join(', ');
-  srcBox.classList.add('loaded');
+  if (rejected.length) {
+    logPanel.classList.add('show');
+    rejected.forEach(n => addLog('err', `不支持的文件类型: ${n} (仅支持 TTF/OTF/TTC)`));
+  }
+  if (srcFiles.length) {
+    const names = srcFiles.map(f => f.name);
+    srcInfo.innerHTML = names.length > 1
+      ? `<span class="file-count">${names.length} files</span> ${names.slice(0, 2).join(', ')}...`
+      : names.join(', ');
+    srcBox.classList.add('loaded');
+  } else {
+    srcInfo.innerHTML = '';
+    srcBox.classList.remove('loaded');
+  }
   checkReady();
 });
 
@@ -222,8 +306,11 @@ convertBtn.addEventListener('click', () => {
   const srcClones = srcFiles.map(f => ({ name: f.name, buffer: f.buffer.slice(0) }));
   const transfers = srcClones.map(f => f.buffer);
 
+  const compatLayer = document.querySelector('input[name="compat-layer"]:checked').value;
+  const outputFormat = document.querySelector('input[name="output-format"]:checked').value;
+  const tpl = outputTpl.value.trim() || '${fontName}UI';
   worker.postMessage(
-    { type: 'convert', srcFiles: srcClones, mode: document.querySelector('input[name="weight-mode"]:checked').value },
+    { type: 'convert', srcFiles: srcClones, mode: document.querySelector('input[name="weight-mode"]:checked').value, compatLayer, outputFormat, outputTemplate: tpl },
     transfers
   );
 
@@ -261,7 +348,8 @@ convertBtn.addEventListener('click', () => {
 });
 
 function addResult(name, buffer) {
-  const blob = new Blob([buffer], { type: 'font/collection' });
+  const isTTF = name.endsWith('.ttf');
+  const blob = new Blob([buffer], { type: isTTF ? 'font/sfnt' : 'font/collection' });
   const url = URL.createObjectURL(blob);
   resultBlobs.push({ name, blob, url });
 
@@ -290,7 +378,7 @@ dlAllBtn.addEventListener('click', async () => {
     const content = await zip.generateAsync({ type: 'blob' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(content);
-    a.download = `FontForge_iOS_${Date.now()}.zip`;
+    a.download = `iFont_${Date.now()}.zip`;
     a.click();
     addLog('ok', 'ZIP 打包下载完成');
   } catch (e) {
