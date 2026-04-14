@@ -12,10 +12,10 @@
 :root { --bg: #000; --surface: #0a0a0a; --border: #333; --border-hover: #666; --text: #fff; --success: #2ea043; --warning: #d29922; --error: #f85149; }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { background: var(--bg); }
-body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 
-.container { max-width: 600px; margin: 0 auto; padding: 60px 24px 80px; }
-@media (max-width: 480px) { .container { padding: 40px 20px 80px; } }
+.container { max-width: 600px; width: 100%; margin: 0 auto; padding: 60px 24px 0; flex: 1 0 auto; display: flex; flex-direction: column; }
+@media (max-width: 480px) { .container { padding: 40px 20px 0; } }
 
 .header { margin-bottom: 48px; text-align: center; position: relative; }
 .header h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.5px; color: var(--text); margin-bottom: 8px; }
@@ -136,11 +136,13 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .running-text { animation: pulse 1.5s infinite; }
 
-.footer { margin-top: 60px; text-align: center; font-size: 12px; color: var(--text3); line-height: 2; }
-.footer a { display: inline-flex; align-items: center; gap: 6px; color: var(--text2); text-decoration: none; transition: color 0.2s; }
-.footer a:hover { color: var(--text); }
-.footer a i { font-size: 14px; margin-top: 1px; }
-.footer .links { margin-top: 8px; display: flex; justify-content: center; gap: 20px; }
+.footer { flex-shrink: 0; margin-top: auto; padding: 32px 0 calc(20px + env(safe-area-inset-bottom)); text-align: center; font-size: 12px; color: #a2a2a2; line-height: 1.6; }
+.footer .footer-content { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.footer .footer-links { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.footer a { display: inline-flex; align-items: center; gap: 6px; color: #a2a2a2; text-decoration: none; transition: color 0.2s, transform 0.2s; }
+.footer a:hover { color: var(--text); transform: translateY(-1px); }
+.footer a i, .footer a svg { font-size: 14px; }
+.footer .footer-sep { color: #a2a2a2; opacity: 0.4; }
 </style>
 <script>
 function openFilza(path, file) {
@@ -273,23 +275,29 @@ function openFilza(path, file) {
     <button type="button" class="dl-all-btn" id="dl-all-btn">下载全部</button>
   </div>
 
-  <div class="footer">
-    <p>&copy; 2026 iFont @huamidev</p>
-    <div class="links">
-      <a href="https://github.com/huami1314/iFont" target="_blank">
-        <i class="fa-brands fa-github"></i>
-        GitHub
-      </a>
-      <a href="https://t.me/huamidev" target="_blank">
-        <i class="fa-brands fa-telegram"></i>
-        huamidev
-      </a>
-      <a href="https://mp.weixin.qq.com/s/Dpla77D9ggSuMgQTj6ZUNA" target="_blank">
-        <i class="fa-brands fa-weixin"></i>
-        一只huami
-      </a>
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-links">
+        <a href="https://github.com/huami1314/iFont" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.58 2 12.26c0 4.52 2.87 8.36 6.84 9.71.5.1.68-.22.68-.48 0-.24-.01-.87-.02-1.7-2.78.62-3.37-1.38-3.37-1.38-.46-1.2-1.12-1.52-1.12-1.52-.92-.65.07-.64.07-.64 1.02.07 1.55 1.07 1.55 1.07.9 1.58 2.36 1.12 2.94.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05A9.4 9.4 0 0 1 12 6.9c.85 0 1.7.12 2.5.35 1.9-1.32 2.74-1.05 2.74-1.05.55 1.41.2 2.45.1 2.71.64.72 1.02 1.64 1.02 2.76 0 3.93-2.35 4.8-4.58 5.05.36.33.68.97.68 1.96 0 1.41-.01 2.54-.01 2.89 0 .26.18.58.69.48 3.97-1.35 6.83-5.19 6.83-9.71C22 6.58 17.52 2 12 2z"/></svg>
+          <span>GitHub</span>
+        </a>
+        <span class="footer-sep">|</span>
+        <a href="https://t.me/huamidev" target="_blank" rel="noopener">
+          <i class="fa-brands fa-telegram"></i>
+          <span>huamidev</span>
+        </a>
+        <span class="footer-sep">|</span>
+        <a href="https://mp.weixin.qq.com/s/Dpla77D9ggSuMgQTj6ZUNA" target="_blank" rel="noopener">
+          <i class="fa-brands fa-weixin"></i>
+          <span>一只huami</span>
+        </a>
+      </div>
+      <div class="footer-copyright">
+        <span>&copy; 2026 iFont All rights reserved.</span>
+      </div>
     </div>
-  </div>
+  </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
