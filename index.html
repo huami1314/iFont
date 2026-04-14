@@ -9,7 +9,8 @@
 <title>iFont</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
-:root { --bg: #000; --surface: #0a0a0a; --border: #333; --border-hover: #666; --text: #fff; --success: #2ea043; --warning: #d29922; --error: #f85149; }
+:root { --bg: #000; --surface: #0a0a0a; --border: #333; --border-hover: #666; --text: #fff; --text2: #999; --text3: #666; --success: #2ea043; --warning: #d29922; --error: #f85149; --overlay-bg: rgba(0,0,0,0.6); --shadow: rgba(0,0,0,0.4); --alpha-06: rgba(255,255,255,0.06); --alpha-08: rgba(255,255,255,0.08); --alpha-10: rgba(255,255,255,0.1); --alpha-05: rgba(255,255,255,0.05); --upload-hover: #111; }
+html.light { --bg: #F8F9FC; --surface: #fff; --border: #ddd; --border-hover: #bbb; --text: #1a1a1a; --text2: #666; --text3: #999; --success: #1a7f37; --warning: #9a6700; --error: #cf222e; --overlay-bg: rgba(0,0,0,0.3); --shadow: rgba(0,0,0,0.1); --alpha-06: rgba(0,0,0,0.04); --alpha-08: rgba(0,0,0,0.06); --alpha-10: rgba(0,0,0,0.08); --alpha-05: rgba(0,0,0,0.03); --upload-hover: #f0f1f4; }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { background: var(--bg); }
 body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
@@ -21,39 +22,42 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .header h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.5px; color: var(--text); margin-bottom: 8px; }
 .header .desc { font-size: 13px; line-height: 1.6; color: var(--text2); }
 
-.notice-btn { position: absolute; top: 0; right: 0; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 20px; padding: 6px 12px; color: var(--text2); font-size: 12px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
-.notice-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); border-color: var(--text3); }
+.header-actions { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 8px; }
+.notice-btn { background: var(--alpha-06); border: 1px solid var(--border); border-radius: 20px; padding: 6px 12px; color: var(--text2); font-size: 12px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+.notice-btn:hover { background: var(--alpha-10); color: var(--text); border-color: var(--text3); }
+.theme-btn { background: var(--alpha-06); border: 1px solid var(--border); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; color: var(--text2); font-size: 14px; }
+.theme-btn:hover { background: var(--alpha-10); color: var(--text); border-color: var(--text3); }
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+.modal-overlay { position: fixed; inset: 0; background: var(--overlay-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
 .modal-overlay.show { opacity: 1; pointer-events: auto; }
-.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 400px; padding: 24px; transform: scale(0.95) translateY(10px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 400px; padding: 24px; transform: scale(0.95) translateY(10px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 20px 40px var(--shadow); }
 .modal-overlay.show .modal { transform: scale(1) translateY(0); }
 .modal-header { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
 .modal-body { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 24px; }
 .modal-body ul { list-style: none; margin-bottom: 12px; padding-left: 0; }
 .modal-body li { position: relative; padding-left: 12px; margin-bottom: 8px; }
 .modal-body li::before { content: ""; position: absolute; left: 0; top: 7px; width: 4px; height: 4px; border-radius: 50%; background: var(--text3); }
-.modal-body a { color: var(--text); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3); transition: border-color 0.2s; }
-.modal-body a:hover { border-color: rgba(255,255,255,1); }
-.modal-body .path { font-family: 'SF Mono', monospace; font-size: 11px; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: var(--text); cursor: pointer; user-select: none; transition: all 0.2s; border: 1px solid transparent; }
-.modal-body .path:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
+.modal-body a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); transition: border-color 0.2s; }
+.modal-body a:hover { border-color: var(--text); }
+.modal-body .path { font-family: 'SF Mono', monospace; font-size: 11px; background: var(--alpha-08); padding: 2px 6px; border-radius: 4px; color: var(--text); cursor: pointer; user-select: none; transition: all 0.2s; border: 1px solid transparent; }
+.modal-body .path:hover { background: var(--alpha-10); border-color: var(--border); }
 .modal-body .path:active { transform: scale(0.96); }
-.qq-group { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text2); text-decoration: none; font-size: 12px; transition: all 0.2s; }
-.qq-group:hover { background: rgba(255,255,255,0.12); border-color: var(--text3); color: var(--text); }
+.qq-group { display: inline-flex; align-items: center; gap: 6px; background: var(--alpha-06); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text2); text-decoration: none; font-size: 12px; transition: all 0.2s; }
+.qq-group:hover { background: var(--alpha-10); border-color: var(--text3); color: var(--text); }
 .modal-body .disclaimer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text3); line-height: 1.5; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 12px; }
 .modal-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
 .modal-btn-sec { background: transparent; border: 1px solid var(--border); color: var(--text3); }
-.modal-btn-sec:hover { color: var(--text); border-color: var(--text2); background: rgba(255,255,255,0.05); }
+.modal-btn-sec:hover { color: var(--text); border-color: var(--text2); background: var(--alpha-05); }
 .modal-btn-pri { background: var(--text); border: 1px solid var(--text); color: var(--bg); }
 .modal-btn-pri:hover { background: #e0e0e0; }
 
-.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-20px); background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 30px; font-size: 13px; z-index: 1001; opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 10px 20px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px; }
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-20px); background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 30px; font-size: 13px; z-index: 1001; opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 10px 20px var(--shadow); display: flex; align-items: center; gap: 8px; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 .upload-section { margin-bottom: 20px; }
 .upload-box { position: relative; border: 1px dashed var(--border); border-radius: 8px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.3s ease; overflow: hidden; background: var(--surface); }
-.upload-box:hover, .upload-box.drag-over { border-color: var(--border-hover); background: #111; }
+.upload-box:hover, .upload-box.drag-over { border-color: var(--border-hover); background: var(--upload-hover); }
 .upload-box:active { transform: scale(0.99); }
 .upload-box.loaded { border-style: solid; border-color: var(--text2); }
 .upload-box .title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
@@ -61,7 +65,7 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .upload-box input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
 .file-info { margin-top: 12px; font-size: 12px; color: var(--text2); word-break: break-all; animation: fadeIn 0.3s ease; pointer-events: none; }
 .file-count { display: inline-block; margin-right: 6px; color: var(--text); font-weight: 500; }
-.preview-item { margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
+.preview-item { margin-top: 10px; padding: 10px; background: var(--alpha-05); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
 .preview-name { font-size: 11px; color: var(--text2); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preview-text-render { font-size: 20px; color: var(--text); white-space: pre-line; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
 .preview-more { margin-top: 10px; font-size: 12px; color: var(--text3); }
@@ -73,7 +77,7 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .mode-label input { position: absolute; opacity: 0; }
 .mode-text { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 12px 4px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; font-weight: 500; color: var(--text2); transition: all 0.2s; box-sizing: border-box; }
 .mode-text small { font-size: 10px; font-weight: 400; opacity: 0.7; margin-top: 4px; line-height: 1.2; }
-.mode-label input:checked + .mode-text { border-color: var(--text); color: var(--text); background: rgba(255,255,255,0.05); }
+.mode-label input:checked + .mode-text { border-color: var(--text); color: var(--text); background: var(--alpha-05); }
 
 .settings-toggle { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; padding: 0 12px; cursor: pointer; font-size: 13px; color: var(--text2); transition: color 0.2s; }
 .settings-toggle:hover { color: var(--text); }
@@ -83,7 +87,7 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .settings-panel.open { max-height: 520px; margin-bottom: 24px; }
 .offset-control { display: flex; align-items: center; gap: 8px; flex: 1; }
 .offset-btn { width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-.offset-btn:hover { border-color: var(--border-hover); background: rgba(255,255,255,0.08); }
+.offset-btn:hover { border-color: var(--border-hover); background: var(--alpha-08); }
 .offset-btn:active { transform: scale(0.92); }
 .offset-value { font-size: 13px; font-family: 'SF Mono', monospace; color: var(--text); width: 48px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 2px 0; outline: none; -moz-appearance: textfield; }
 .offset-value::-webkit-inner-spin-button, .offset-value::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -99,10 +103,10 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .format-label { flex: 1; position: relative; cursor: pointer; }
 .format-label input { position: absolute; opacity: 0; }
 .format-text { display: block; text-align: center; padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text2); transition: all 0.2s; }
-.format-label input:checked + .format-text { border-color: var(--text); color: var(--text); background: rgba(255,255,255,0.05); }
+.format-label input:checked + .format-text { border-color: var(--text); color: var(--text); background: var(--alpha-05); }
 
 .convert-btn { width: 100%; padding: 18px; border: 1px solid var(--text); border-radius: 14px; background: transparent; color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; letter-spacing: 1px; position: relative; overflow: hidden; margin-bottom: 24px; }
-.convert-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+.convert-btn:hover:not(:disabled) { background: var(--alpha-10); }
 .convert-btn:active:not(:disabled) { transform: scale(0.98); }
 .convert-btn:disabled { border-color: var(--border); color: var(--text3); cursor: not-allowed; }
 .convert-btn.running { border-color: var(--border); color: var(--text2); pointer-events: none; }
@@ -136,15 +140,19 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .running-text { animation: pulse 1.5s infinite; }
 
-.footer { flex-shrink: 0; margin-top: auto; padding: 32px 0 calc(20px + env(safe-area-inset-bottom)); text-align: center; font-size: 12px; color: #a2a2a2; line-height: 1.6; }
+.footer { flex-shrink: 0; margin-top: auto; padding: 32px 0 calc(20px + env(safe-area-inset-bottom)); text-align: center; font-size: 12px; color: var(--text3); line-height: 1.6; }
 .footer .footer-content { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .footer .footer-links { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
-.footer a { display: inline-flex; align-items: center; gap: 6px; color: #a2a2a2; text-decoration: none; transition: color 0.2s, transform 0.2s; }
+.footer a { display: inline-flex; align-items: center; gap: 6px; color: var(--text3); text-decoration: none; transition: color 0.2s, transform 0.2s; }
 .footer a:hover { color: var(--text); transform: translateY(-1px); }
 .footer a i, .footer a svg { font-size: 14px; }
-.footer .footer-sep { color: #a2a2a2; opacity: 0.4; }
+.footer .footer-sep { color: var(--text3); opacity: 0.4; }
 </style>
 <script>
+(function(){
+  const saved = localStorage.getItem('iFont_theme');
+  if (saved === 'light') document.documentElement.classList.add('light');
+})();
 function openFilza(path, file) {
   const url = `filza://view${path}`;
   const a = document.createElement('a');
@@ -159,7 +167,10 @@ function openFilza(path, file) {
 <body>
 <div class="container">
   <div class="header">
-    <button class="notice-btn" id="notice-btn"><i class="fa-solid fa-circle-info"></i> 说明</button>
+    <div class="header-actions">
+      <button class="notice-btn" id="notice-btn"><i class="fa-solid fa-circle-info"></i> 说明</button>
+      <button class="theme-btn" id="theme-btn"><i class="fa-solid fa-moon"></i></button>
+    </div>
     <h1>iFont</h1>
     <p class="desc">本地 iOS 9~17 & 18~26 字体转换引擎<br>支持 TTF / OTF / TTC 批量转换</p>
   </div>
@@ -344,6 +355,20 @@ function showNotice() { noticeModal.classList.add('show'); }
 function hideNotice() { noticeModal.classList.remove('show'); }
 
 noticeBtn.addEventListener('click', () => { noticeNeverBtn.style.display = 'none'; showNotice(); });
+
+const themeBtn = document.getElementById('theme-btn');
+const themeIcon = themeBtn.querySelector('i');
+function updateThemeIcon() {
+  const isLight = document.documentElement.classList.contains('light');
+  themeIcon.className = isLight ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+}
+updateThemeIcon();
+themeBtn.addEventListener('click', () => {
+  document.documentElement.classList.toggle('light');
+  const isLight = document.documentElement.classList.contains('light');
+  localStorage.setItem('iFont_theme', isLight ? 'light' : 'dark');
+  updateThemeIcon();
+});
 noticeOkBtn.addEventListener('click', hideNotice);
 noticeNeverBtn.addEventListener('click', () => {
   localStorage.setItem('iFont_hideNotice', '1');
