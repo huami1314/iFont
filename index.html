@@ -29,8 +29,12 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .upload-box .title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
 .upload-box .hint { font-size: 12px; color: var(--text3); }
 .upload-box input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
-.file-info { margin-top: 12px; font-size: 12px; color: var(--text2); word-break: break-all; animation: fadeIn 0.3s ease; }
+.file-info { margin-top: 12px; font-size: 12px; color: var(--text2); word-break: break-all; animation: fadeIn 0.3s ease; pointer-events: none; }
 .file-count { display: inline-block; margin-right: 6px; color: var(--text); font-weight: 500; }
+.preview-item { margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
+.preview-name { font-size: 11px; color: var(--text2); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-text-render { font-size: 20px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.preview-more { margin-top: 10px; font-size: 12px; color: var(--text3); }
 
 .mode-section { margin-bottom: 24px; padding: 0 12px; }
 .mode-title { font-size: 13px; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
@@ -46,7 +50,7 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .settings-toggle .arrow { font-size: 10px; transition: transform 0.3s; }
 .settings-toggle.open .arrow { transform: rotate(90deg); }
 .settings-panel { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, margin-bottom 0.3s ease-out; margin-bottom: 0; }
-.settings-panel.open { max-height: 160px; margin-bottom: 24px; }
+.settings-panel.open { max-height: 220px; margin-bottom: 24px; }
 .settings-inner { padding: 0 12px; }
 .setting-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .setting-label { font-size: 12px; color: var(--text2); white-space: nowrap; min-width: 70px; }
@@ -145,6 +149,10 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
         <input class="setting-input" id="output-tpl" type="text" placeholder="${fontName}UI">
       </div>
       <div class="setting-row">
+        <span class="setting-label">预览文本</span>
+        <input class="setting-input" id="preview-text" type="text" placeholder="我爱的小字体预览:(Abc123)">
+      </div>
+      <div class="setting-row">
         <span class="setting-label">兼容配置</span>
         <div class="format-options">
           <label class="format-label">
@@ -221,6 +229,7 @@ const progressWrap = $('#progress-wrap'), progressFill = $('#progress-fill');
 const logPanel = $('#log-panel'), logScroll = $('#log-scroll');
 const resultsDiv = $('#results'), dlAllWrap = $('#dl-all-wrap'), dlAllBtn = $('#dl-all-btn');
 const outputTpl = $('#output-tpl');
+const previewTextInput = $('#preview-text');
 const settingsToggle = $('#settings-toggle'), settingsPanel = $('#settings-panel');
 
 settingsToggle.addEventListener('click', () => {
@@ -232,6 +241,61 @@ outputTpl.value = localStorage.getItem('iFont_outputTpl') || '';
 outputTpl.addEventListener('input', () => {
   localStorage.setItem('iFont_outputTpl', outputTpl.value);
 });
+
+previewTextInput.value = localStorage.getItem('iFont_previewText') || '我爱的小字体预览:(Abc123)';
+previewTextInput.addEventListener('input', () => {
+  localStorage.setItem('iFont_previewText', previewTextInput.value);
+  if (srcFiles.length > 0) renderPreviews();
+});
+
+function renderPreviews() {
+  const text = previewTextInput.value || '我爱的小字体预览:(Abc123)';
+  if (!srcFiles.length) {
+    srcInfo.innerHTML = '';
+    srcBox.classList.remove('loaded');
+    return;
+  }
+  
+  let html = '';
+  if (window.previewUrls) window.previewUrls.forEach(url => URL.revokeObjectURL(url));
+  window.previewUrls = [];
+  let styleCss = '';
+
+  const maxPreview = 3; 
+  const previewCount = Math.min(srcFiles.length, maxPreview);
+
+  for (let i = 0; i < previewCount; i++) {
+    const f = srcFiles[i];
+    const blob = new Blob([f.buffer]);
+    const url = URL.createObjectURL(blob);
+    window.previewUrls.push(url);
+    const fontFamily = `preview_font_${i}_${Date.now()}`;
+    styleCss += `@font-face { font-family: "${fontFamily}"; src: url("${url}"); }\n`;
+
+    html += `
+      <div class="preview-item">
+        <div class="preview-name">${f.name}</div>
+        <div class="preview-text-render" style="font-family: '${fontFamily}'">${text}</div>
+      </div>
+    `;
+  }
+  
+  if (srcFiles.length > maxPreview) {
+    html += `<div class="preview-more">...及其他 ${srcFiles.length - maxPreview} 个文件</div>`;
+  }
+
+  let styleEl = $('#preview-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'preview-style';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.innerHTML = styleCss;
+  
+  srcInfo.innerHTML = html;
+  srcBox.classList.add('loaded');
+  checkReady();
+}
 
 function setupDrop(box, input, onFiles) {
   ['dragenter','dragover'].forEach(e => box.addEventListener(e, ev => { ev.preventDefault(); box.classList.add('drag-over'); }));
@@ -255,17 +319,7 @@ setupDrop(srcBox, srcInput, async files => {
     logPanel.classList.add('show');
     rejected.forEach(n => addLog('err', `不支持的文件类型: ${n} (仅支持 TTF/OTF/TTC)`));
   }
-  if (srcFiles.length) {
-    const names = srcFiles.map(f => f.name);
-    srcInfo.innerHTML = names.length > 1
-      ? `<span class="file-count">${names.length} files</span> ${names.slice(0, 2).join(', ')}...`
-      : names.join(', ');
-    srcBox.classList.add('loaded');
-  } else {
-    srcInfo.innerHTML = '';
-    srcBox.classList.remove('loaded');
-  }
-  checkReady();
+  renderPreviews();
 });
 
 function checkReady() {

@@ -24,7 +24,7 @@
 ## 联系
 
 - Telegram: [@huamidev](https://t.me/huamidev)
-- 公众号: 一只huami
+- 公众号: 「 一只huami 」
 
 ## License
 
