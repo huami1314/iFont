@@ -33,7 +33,7 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .file-count { display: inline-block; margin-right: 6px; color: var(--text); font-weight: 500; }
 .preview-item { margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
 .preview-name { font-size: 11px; color: var(--text2); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.preview-text-render { font-size: 20px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.preview-text-render { font-size: 20px; color: var(--text); white-space: pre-line; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
 .preview-more { margin-top: 10px; font-size: 12px; color: var(--text3); }
 
 .mode-section { margin-bottom: 24px; padding: 0 12px; }
@@ -50,7 +50,15 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .settings-toggle .arrow { font-size: 10px; transition: transform 0.3s; }
 .settings-toggle.open .arrow { transform: rotate(90deg); }
 .settings-panel { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, margin-bottom 0.3s ease-out; margin-bottom: 0; }
-.settings-panel.open { max-height: 220px; margin-bottom: 24px; }
+.settings-panel.open { max-height: 520px; margin-bottom: 24px; }
+.offset-control { display: flex; align-items: center; gap: 8px; flex: 1; }
+.offset-btn { width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.offset-btn:hover { border-color: var(--border-hover); background: rgba(255,255,255,0.08); }
+.offset-btn:active { transform: scale(0.92); }
+.offset-value { font-size: 13px; font-family: 'SF Mono', monospace; color: var(--text); width: 48px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 2px 0; outline: none; -moz-appearance: textfield; }
+.offset-value::-webkit-inner-spin-button, .offset-value::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.offset-value:focus { border-color: var(--border-hover); }
+.offset-hint { font-size: 11px; color: var(--text3); margin-left: 4px; }
 .settings-inner { padding: 0 12px; }
 .setting-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .setting-label { font-size: 12px; color: var(--text2); white-space: nowrap; min-width: 70px; }
@@ -178,6 +186,33 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
           </label>
         </div>
       </div>
+      <div class="setting-row">
+        <span class="setting-label">字体大小</span>
+        <div class="offset-control">
+          <button class="offset-btn" data-target="size" data-delta="-50">−</button>
+          <input type="number" class="offset-value" id="size-val" value="0">
+          <button class="offset-btn" data-target="size" data-delta="50">+</button>
+          <span class="offset-hint" id="size-hint"></span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">字体粗细</span>
+        <div class="offset-control">
+          <button class="offset-btn" data-target="weight" data-delta="-50">−</button>
+          <input type="number" class="offset-value" id="weight-val" value="0">
+          <button class="offset-btn" data-target="weight" data-delta="50">+</button>
+          <span class="offset-hint" id="weight-hint"></span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">字体行距</span>
+        <div class="offset-control">
+          <button class="offset-btn" data-target="lineHeight" data-delta="-50">−</button>
+          <input type="number" class="offset-value" id="lh-val" value="0">
+          <button class="offset-btn" data-target="lineHeight" data-delta="50">+</button>
+          <span class="offset-hint" id="lh-hint"></span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -231,6 +266,10 @@ const resultsDiv = $('#results'), dlAllWrap = $('#dl-all-wrap'), dlAllBtn = $('#
 const outputTpl = $('#output-tpl');
 const previewTextInput = $('#preview-text');
 const settingsToggle = $('#settings-toggle'), settingsPanel = $('#settings-panel');
+const sizeVal = $('#size-val'), weightVal = $('#weight-val'), lhVal = $('#lh-val');
+const sizeHint = $('#size-hint'), weightHint = $('#weight-hint'), lhHint = $('#lh-hint');
+let fontOffsets = { sizeOffset: 0, weightOffset: 0, lineHeightOffset: 0 };
+let fontMetrics = null;
 
 settingsToggle.addEventListener('click', () => {
   settingsToggle.classList.toggle('open');
@@ -248,8 +287,49 @@ previewTextInput.addEventListener('input', () => {
   if (srcFiles.length > 0) renderPreviews();
 });
 
+function updateOffsetHints() {
+  if (!fontMetrics) { sizeHint.textContent = ''; weightHint.textContent = ''; lhHint.textContent = ''; return; }
+  const em = fontMetrics.unitsPerEm - fontOffsets.sizeOffset;
+  sizeHint.textContent = `EM=${em}`;
+  weightHint.textContent = `W=${fontMetrics.usWeightClass + fontOffsets.weightOffset}`;
+  const asc = fontMetrics.sTypoAscender + fontOffsets.lineHeightOffset;
+  const desc = fontMetrics.sTypoDescender - fontOffsets.lineHeightOffset;
+  lhHint.textContent = `${asc}/${desc}`;
+}
+
+function updateOffsetDisplay() {
+  sizeVal.value = fontOffsets.sizeOffset;
+  weightVal.value = fontOffsets.weightOffset;
+  lhVal.value = fontOffsets.lineHeightOffset;
+  updateOffsetHints();
+}
+
+sizeVal.addEventListener('change', () => { fontOffsets.sizeOffset = parseInt(sizeVal.value) || 0; updateOffsetHints(); renderPreviews(); });
+weightVal.addEventListener('change', () => { fontOffsets.weightOffset = parseInt(weightVal.value) || 0; updateOffsetHints(); renderPreviews(); });
+lhVal.addEventListener('change', () => { fontOffsets.lineHeightOffset = parseInt(lhVal.value) || 0; updateOffsetHints(); renderPreviews(); });
+
+document.querySelectorAll('.offset-btn').forEach(btn => {
+  let lastTap = 0;
+  btn.addEventListener('touchstart', e => {
+    const now = Date.now();
+    if (now - lastTap < 300) { e.preventDefault(); return; }
+    lastTap = now;
+  }, { passive: false });
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    const target = btn.dataset.target;
+    const delta = parseInt(btn.dataset.delta);
+    if (target === 'size') fontOffsets.sizeOffset += delta;
+    else if (target === 'weight') fontOffsets.weightOffset += delta;
+    else if (target === 'lineHeight') fontOffsets.lineHeightOffset += delta;
+    updateOffsetDisplay();
+    renderPreviews();
+  });
+});
+
 function renderPreviews() {
   const text = previewTextInput.value || '我爱的小字体预览:(Abc123)';
+  const line2 = '第二行预览文本示例';
   if (!srcFiles.length) {
     srcInfo.innerHTML = '';
     srcBox.classList.remove('loaded');
@@ -263,6 +343,12 @@ function renderPreviews() {
 
   const maxPreview = 3; 
   const previewCount = Math.min(srcFiles.length, maxPreview);
+  const upm = fontMetrics?.unitsPerEm || 1000;
+  const previewSize = Math.max(8, Math.round(20 * upm / Math.max(16, upm - fontOffsets.sizeOffset)));
+  const previewWeight = Math.max(1, 400 + fontOffsets.weightOffset);
+  const cssLineHeight = 1.4 + (fontOffsets.lineHeightOffset * 2) / upm;
+  const strokePx = fontOffsets.weightOffset > 0 ? (fontOffsets.weightOffset / 200).toFixed(2) : 0;
+  const strokeStyle = strokePx > 0 ? `-webkit-text-stroke: ${strokePx}px currentColor;` : '';
 
   for (let i = 0; i < previewCount; i++) {
     const f = srcFiles[i];
@@ -270,12 +356,12 @@ function renderPreviews() {
     const url = URL.createObjectURL(blob);
     window.previewUrls.push(url);
     const fontFamily = `preview_font_${i}_${Date.now()}`;
-    styleCss += `@font-face { font-family: "${fontFamily}"; src: url("${url}"); }\n`;
+    styleCss += `@font-face { font-family: "${fontFamily}"; src: url("${url}"); font-weight: 1 999; }\n`;
 
     html += `
       <div class="preview-item">
         <div class="preview-name">${f.name}</div>
-        <div class="preview-text-render" style="font-family: '${fontFamily}'">${text}</div>
+        <div class="preview-text-render" style="font-family: '${fontFamily}'; font-size: ${previewSize}px; font-weight: ${previewWeight}; font-variation-settings: 'wght' ${previewWeight}; line-height: ${cssLineHeight.toFixed(2)}; ${strokeStyle}">${text}\n${line2}</div>
       </div>
     `;
   }
@@ -318,6 +404,11 @@ setupDrop(srcBox, srcInput, async files => {
   if (rejected.length) {
     logPanel.classList.add('show');
     rejected.forEach(n => addLog('err', `不支持的文件类型: ${n} (仅支持 TTF/OTF/TTC)`));
+  }
+  if (srcFiles.length) {
+    const ext = srcFiles[0].name.split('.').pop().toLowerCase();
+    const radio = document.querySelector(`input[name="output-format"][value="${ext === 'ttc' ? 'ttc' : 'ttf'}"]`);
+    if (radio) radio.checked = true;
   }
   renderPreviews();
 });
@@ -363,8 +454,10 @@ convertBtn.addEventListener('click', () => {
   const compatLayer = document.querySelector('input[name="compat-layer"]:checked').value;
   const outputFormat = document.querySelector('input[name="output-format"]:checked').value;
   const tpl = outputTpl.value.trim() || '${fontName}UI';
+  const activeOffsets = (fontOffsets.sizeOffset || fontOffsets.weightOffset || fontOffsets.lineHeightOffset)
+    ? { ...fontOffsets } : null;
   worker.postMessage(
-    { type: 'convert', srcFiles: srcClones, mode: document.querySelector('input[name="weight-mode"]:checked').value, compatLayer, outputFormat, outputTemplate: tpl },
+    { type: 'convert', srcFiles: srcClones, mode: document.querySelector('input[name="weight-mode"]:checked').value, compatLayer, outputFormat, outputTemplate: tpl, offsets: activeOffsets },
     transfers
   );
 
@@ -380,12 +473,15 @@ convertBtn.addEventListener('click', () => {
       case 'result':
         addResult(msg.name, msg.buffer);
         break;
+      case 'fontMetrics':
+        fontMetrics = msg.metrics;
+        updateOffsetHints();
+        break;
       case 'done':
         addLog('ok', `封装流程结束`);
         progressFill.style.width = '100%';
         convertBtn.classList.remove('running');
         convertBtn.textContent = 'DONE';
-        
         if (resultBlobs.length > 1) {
           dlAllWrap.style.display = 'block';
           document.getElementById('dl-all-btn').click();

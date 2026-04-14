@@ -128,12 +128,81 @@ function getNameInfo(nd) {
   };
 }
 
-function modifyOS2(d, weight, fsType) {
+function readFontMetrics(tables) {
+  const m = { usWeightClass: 400, unitsPerEm: 1000, sTypoAscender: 800, sTypoDescender: -200, sTypoLineGap: 0 };
+  const os2 = tables.find(t => t.tag === 'OS/2');
+  if (os2 && os2.data.length >= 78) {
+    const dv = new DataView(os2.data.buffer, os2.data.byteOffset, os2.data.byteLength);
+    m.usWeightClass = dv.getUint16(4, false);
+    if (os2.data.length >= 74) {
+      m.sTypoAscender = dv.getInt16(68, false);
+      m.sTypoDescender = dv.getInt16(70, false);
+      m.sTypoLineGap = dv.getInt16(72, false);
+    }
+  }
+  const head = tables.find(t => t.tag === 'head');
+  if (head && head.data.length >= 20) {
+    const dv = new DataView(head.data.buffer, head.data.byteOffset, head.data.byteLength);
+    m.unitsPerEm = dv.getUint16(18, false);
+  }
+  return m;
+}
+
+function scaleI16(dv, off, scale) { dv.setInt16(off, Math.round(dv.getInt16(off, false) * scale), false); }
+function scaleU16(dv, off, scale) { dv.setUint16(off, Math.max(0, Math.round(dv.getUint16(off, false) * scale)), false); }
+
+function modifyOS2(d, weight, fsType, lineHeightOffset, upmScale) {
   const c = new Uint8Array(d.length);
   c.set(d);
   const dv = new DataView(c.buffer);
   writeU16(dv, 4, weight);
   writeU16(dv, 8, fsType);
+  if (upmScale !== 1) {
+    scaleI16(dv, 2, upmScale);
+    for (let p = 10; p <= 28; p += 2) scaleI16(dv, p, upmScale);
+    if (d.length >= 78) {
+      scaleI16(dv, 68, upmScale); scaleI16(dv, 70, upmScale); scaleI16(dv, 72, upmScale);
+      scaleU16(dv, 74, upmScale); scaleU16(dv, 76, upmScale);
+    }
+    const ver = dv.getUint16(0, false);
+    if (ver >= 2 && d.length >= 92) { scaleI16(dv, 88, upmScale); scaleI16(dv, 90, upmScale); }
+  }
+  if (lineHeightOffset && d.length >= 78) {
+    dv.setInt16(68, dv.getInt16(68, false) + lineHeightOffset, false);
+    dv.setInt16(70, dv.getInt16(70, false) - lineHeightOffset, false);
+    dv.setInt16(72, dv.getInt16(72, false) + lineHeightOffset, false);
+    dv.setUint16(74, Math.max(0, dv.getUint16(74, false) + lineHeightOffset), false);
+    dv.setUint16(76, Math.max(0, dv.getUint16(76, false) + lineHeightOffset), false);
+  }
+  return c;
+}
+
+function modifyHhea(d, lineHeightOffset, upmScale) {
+  if (!lineHeightOffset && upmScale === 1) return d;
+  if (!d || d.length < 10) return d;
+  const c = new Uint8Array(d.length);
+  c.set(d);
+  const dv = new DataView(c.buffer);
+  if (upmScale !== 1) {
+    scaleI16(dv, 4, upmScale); scaleI16(dv, 6, upmScale); scaleI16(dv, 8, upmScale);
+  }
+  if (lineHeightOffset) {
+    dv.setInt16(4, dv.getInt16(4, false) + lineHeightOffset, false);
+    dv.setInt16(6, dv.getInt16(6, false) - lineHeightOffset, false);
+    dv.setInt16(8, dv.getInt16(8, false) + lineHeightOffset, false);
+  }
+  return c;
+}
+
+function modifyHead(d, sizeOffset) {
+  if (!sizeOffset || !d || d.length < 20) return d;
+  const c = new Uint8Array(d.length);
+  c.set(d);
+  const dv = new DataView(c.buffer);
+  const cur = dv.getUint16(18, false);
+  const next = Math.max(16, cur - sizeOffset);
+  dv.setUint16(18, next, false);
+  dv.setUint32(8, 0, false);
   return c;
 }
 
@@ -345,25 +414,62 @@ function buildSFNT(font) {
     writeU32(dv, r + 12, sorted[i].data.length);
   }
   for (let i = 0; i < nt; i++) bytes.set(sorted[i].data, tableOffsets[i]);
+  const headIdx = sorted.findIndex(t => t.tag === 'head');
+  if (headIdx >= 0) {
+    const ho = tableOffsets[headIdx];
+    dv.setUint32(ho + 8, 0, false);
+    const headLen = sorted[headIdx].data.length;
+    writeU32(dv, 12 + headIdx * 16 + 4, calcChecksum(new Uint8Array(buf, ho, headLen)));
+    const total = calcChecksum(new Uint8Array(buf));
+    dv.setUint32(ho + 8, (0xB1B0AFBA - total) >>> 0, false);
+  }
   return buf;
 }
 
-function convertOne(sources, mode) {
+function convertOne(sources, mode, offsets) {
   log('info', `  映射配置: ${mode}, 开始组装数据结构...`);
+  const wOff = offsets?.weightOffset || 0;
+  const sOff = offsets?.sizeOffset || 0;
+  const lOff = offsets?.lineHeightOffset || 0;
+  if (wOff || sOff || lOff) {
+    log('info', `  应用偏移: 粗细${wOff>=0?'+':''}${wOff}, 大小${sOff>=0?'+':''}${sOff}, 行距${lOff>=0?'+':''}${lOff}`);
+  }
   const fonts = [];
   const os2Cache = new Map();
+  const hheaCache = new Map();
+  const headCache = new Map();
+  const upmScale = sOff ? (function() {
+    const first = sources.values().next().value;
+    const hd = first.tables.find(t => t.tag === 'head');
+    if (!hd || hd.data.length < 20) return 1;
+    const dv = new DataView(hd.data.buffer, hd.data.byteOffset, hd.data.byteLength);
+    const oldUPM = dv.getUint16(18, false);
+    const newUPM = Math.max(16, oldUPM - sOff);
+    return newUPM / oldUPM;
+  })() : 1;
+  if (sOff) log('info', `  UPM 缩放比: ${upmScale.toFixed(4)}`);
   for (let i = 0; i < TEMPLATES.length; i++) {
     const tpl = TEMPLATES[i];
     const nameData = base64ToUint8Array(tpl.nameB64);
     const src = pickSource(sources, tpl.subfamily.toLowerCase(), mode);
+    const srcId = src.tables.length;
     const tables = [];
     for (const t of src.tables) {
       if (t.tag === 'name') {
         tables.push({ tag: 'name', data: nameData });
       } else if (t.tag === 'OS/2') {
-        const key = `${tpl.weightClass}:${tpl.fsType}`;
-        if (!os2Cache.has(key)) os2Cache.set(key, modifyOS2(t.data, tpl.weightClass, tpl.fsType));
+        const w = Math.max(1, tpl.weightClass + wOff);
+        const key = `${srcId}:${w}:${tpl.fsType}:${lOff}:${sOff}`;
+        if (!os2Cache.has(key)) os2Cache.set(key, modifyOS2(t.data, w, tpl.fsType, lOff, upmScale));
         tables.push({ tag: 'OS/2', data: os2Cache.get(key) });
+      } else if (t.tag === 'hhea' && (lOff || upmScale !== 1)) {
+        const key = `${srcId}:hhea:${lOff}:${sOff}`;
+        if (!hheaCache.has(key)) hheaCache.set(key, modifyHhea(t.data, lOff, upmScale));
+        tables.push({ tag: 'hhea', data: hheaCache.get(key) });
+      } else if (t.tag === 'head' && sOff) {
+        const key = `${srcId}:head:${sOff}`;
+        if (!headCache.has(key)) headCache.set(key, modifyHead(t.data, sOff));
+        tables.push({ tag: 'head', data: headCache.get(key) });
       } else {
         tables.push({ tag: t.tag, data: t.data });
       }
@@ -383,8 +489,8 @@ function convertToTTC(fonts) {
 }
 
 function convertToTTFs(fonts) {
-  log('info', `  拆分为独立 TTF 文件...`);
-  return fonts.map(f => buildSFNT(f));
+  log('info', `  拆分为独立 TTF 文件 (${fonts.length} 个)...`);
+  return fonts;
 }
 
 function applyTemplate(tpl, fontName) {
@@ -395,7 +501,7 @@ self.onmessage = function(e) {
   const { type } = e.data;
   if (type === 'convert') {
     try {
-      const { srcFiles, mode, compatLayer, outputFormat, outputTemplate } = e.data;
+      const { srcFiles, mode, compatLayer, outputFormat, outputTemplate, offsets } = e.data;
       const isLegacy = compatLayer === 'ios9';
       const isTTF = outputFormat === 'ttf';
       const fams = new Set();
@@ -412,20 +518,52 @@ self.onmessage = function(e) {
         const sources = loadSource(buffer);
         log('info', `  检测到字重: ${[...sources.keys()].join(', ')}`);
 
-        const fonts = convertOne(sources, mode);
+        const firstSrc = sources.values().next().value;
+        if (firstSrc && si === 0) {
+          const metrics = readFontMetrics(firstSrc.tables);
+          log('info', `  源字体参数: 粗细=${metrics.usWeightClass}, EM=${metrics.unitsPerEm}, 上沿=${metrics.sTypoAscender}, 下沿=${metrics.sTypoDescender}, 行间距=${metrics.sTypoLineGap}`);
+          self.postMessage({ type: 'fontMetrics', metrics });
+        }
+
         const stem = name.replace(/\.[^.]+$/, '');
         const outStem = applyTemplate(outputTemplate || '${fontName}UI', stem);
 
         if (isTTF) {
-          const ttfs = convertToTTFs(fonts);
-          for (let ti = 0; ti < ttfs.length; ti++) {
-            const tpl = TEMPLATES[ti];
-            const ttfName = `${tpl.family}.ttf`;
-            self.postMessage({ type: 'result', name: ttfName, buffer: ttfs[ti] }, [ttfs[ti]]);
-            if ((ti + 1) % 50 === 0) log('info', `  输出进度: ${Math.floor((ti + 1) / ttfs.length * 100)}%`);
+          const wOff = offsets?.weightOffset || 0;
+          const sOff = offsets?.sizeOffset || 0;
+          const lOff = offsets?.lineHeightOffset || 0;
+          const seen = new Set();
+          const uniqueSrcs = [];
+          for (const [k, v] of sources) { if (!seen.has(v)) { seen.add(v); uniqueSrcs.push({ key: k, src: v }); } }
+          const upmS = sOff ? (function() {
+            const hd = uniqueSrcs[0].src.tables.find(t => t.tag === 'head');
+            if (!hd || hd.data.length < 20) return 1;
+            const d = new DataView(hd.data.buffer, hd.data.byteOffset, hd.data.byteLength);
+            return Math.max(16, d.getUint16(18, false) - sOff) / d.getUint16(18, false);
+          })() : 1;
+          for (let ui = 0; ui < uniqueSrcs.length; ui++) {
+            const { src } = uniqueSrcs[ui];
+            const tables = src.tables.map(t => {
+              if (t.tag === 'OS/2') {
+                const od = new DataView(t.data.buffer, t.data.byteOffset, t.data.byteLength);
+                const ow = od.getUint16(4, false);
+                const of2 = od.getUint16(8, false);
+                return { tag: 'OS/2', data: modifyOS2(t.data, Math.max(1, ow + wOff), of2, lOff, upmS) };
+              }
+              if (t.tag === 'hhea') return { tag: 'hhea', data: modifyHhea(t.data, lOff, upmS) };
+              if (t.tag === 'head' && sOff) return { tag: 'head', data: modifyHead(t.data, sOff) };
+              return t;
+            });
+            const result = buildSFNT({ sfVersion: src.sfVersion, tables });
+            const suffix = uniqueSrcs.length > 1 ? `_${uniqueSrcs[ui].key}` : '';
+            const outName = outStem + suffix + '.ttf';
+            const sizeMB = (result.byteLength / 1048576).toFixed(1);
+            log('ok', `  输出: ${desensitize(outName)} (${sizeMB} MB)`);
+            self.postMessage({ type: 'result', name: outName, buffer: result }, [result]);
           }
-          log('ok', `  拆分完成: ${ttfs.length} 个 TTF`);
+          log('ok', `  TTF 修改完成: ${uniqueSrcs.length} 个文件`);
         } else {
+          const fonts = convertOne(sources, mode, offsets);
           const result = convertToTTC(fonts);
           const outName = outStem + '.ttc';
           const sizeMB = (result.byteLength / 1048576).toFixed(1);
