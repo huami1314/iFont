@@ -17,9 +17,39 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .container { max-width: 600px; margin: 0 auto; padding: 60px 24px 80px; }
 @media (max-width: 480px) { .container { padding: 40px 20px 80px; } }
 
-.header { margin-bottom: 48px; text-align: center; }
+.header { margin-bottom: 48px; text-align: center; position: relative; }
 .header h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.5px; color: var(--text); margin-bottom: 8px; }
 .header .desc { font-size: 13px; line-height: 1.6; color: var(--text2); }
+
+.notice-btn { position: absolute; top: 0; right: 0; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 20px; padding: 6px 12px; color: var(--text2); font-size: 12px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+.notice-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); border-color: var(--text3); }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 400px; padding: 24px; transform: scale(0.95) translateY(10px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+.modal-overlay.show .modal { transform: scale(1) translateY(0); }
+.modal-header { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.modal-body { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 24px; }
+.modal-body ul { list-style: none; margin-bottom: 12px; padding-left: 0; }
+.modal-body li { position: relative; padding-left: 12px; margin-bottom: 8px; }
+.modal-body li::before { content: ""; position: absolute; left: 0; top: 7px; width: 4px; height: 4px; border-radius: 50%; background: var(--text3); }
+.modal-body a { color: var(--text); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3); transition: border-color 0.2s; }
+.modal-body a:hover { border-color: rgba(255,255,255,1); }
+.modal-body .path { font-family: 'SF Mono', monospace; font-size: 11px; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: var(--text); cursor: pointer; user-select: none; transition: all 0.2s; border: 1px solid transparent; }
+.modal-body .path:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
+.modal-body .path:active { transform: scale(0.96); }
+.qq-group { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text2); text-decoration: none; font-size: 12px; transition: all 0.2s; }
+.qq-group:hover { background: rgba(255,255,255,0.12); border-color: var(--text3); color: var(--text); }
+.modal-body .disclaimer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text3); line-height: 1.5; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 12px; }
+.modal-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.modal-btn-sec { background: transparent; border: 1px solid var(--border); color: var(--text3); }
+.modal-btn-sec:hover { color: var(--text); border-color: var(--text2); background: rgba(255,255,255,0.05); }
+.modal-btn-pri { background: var(--text); border: 1px solid var(--text); color: var(--bg); }
+.modal-btn-pri:hover { background: #e0e0e0; }
+
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-20px); background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 30px; font-size: 13px; z-index: 1001; opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 10px 20px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 .upload-section { margin-bottom: 20px; }
 .upload-box { position: relative; border: 1px dashed var(--border); border-radius: 8px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.3s ease; overflow: hidden; background: var(--surface); }
@@ -112,12 +142,24 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 .footer a i { font-size: 14px; margin-top: 1px; }
 .footer .links { margin-top: 8px; display: flex; justify-content: center; gap: 20px; }
 </style>
+<script>
+function openFilza(path, file) {
+  const url = `filza://view${path}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => document.body.removeChild(a), 500);
+}
+</script>
 </head>
 <body>
 <div class="container">
   <div class="header">
+    <button class="notice-btn" id="notice-btn"><i class="fa-solid fa-circle-info"></i> 说明</button>
     <h1>iFont</h1>
-    <p class="desc">纯本地 iOS 18~26 字体转换引擎<br>支持 TTF / OTF / TTC 批量转换</p>
+    <p class="desc">本地 iOS 9~17 & 18~26 字体转换引擎<br>支持 TTF / OTF / TTC 批量转换</p>
   </div>
 
   <div class="upload-section">
@@ -251,7 +293,61 @@ body { font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; 
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<div class="modal-overlay" id="notice-modal">
+  <div class="modal">
+    <div class="modal-header">使用说明</div>
+    <div class="modal-body">
+      <ul>
+        <li>本站点仅提供字体转换、参数调节等功能，不提供直接修改系统字体的服务。</li>
+        <li>
+          <b>iOS 9~16 (越狱) 替换路径 (点击跳转 Filza):</b> 
+          <br>中文字体: <span class="path" onclick="openFilza('/var/jb/System/Library/Fonts/LanguageSupport', 'PingFang.ttc')">/var/jb/../LanguageSupport/PingFang.ttc</span>
+          <br>英文字体: <span class="path" onclick="openFilza('/var/jb/System/Library/Fonts/CoreUI', 'SFUI.ttf')">/var/jb/../CoreUI/SFUI.ttf</span>
+        </li>
+        <li><b>iOS 17~26 替换:</b> <br>需要使用 <a href="https://github.com/rooootdev/lara/releases" target="_blank">Lara 工具</a> 安装</li>
+      </ul>
+      <div class="disclaimer">由 <b>huami</b> 免费开源发布，遵循 <a href="https://github.com/huami1314/ifontios/blob/main/LICENSE" target="_blank">GPLv3 协议</a><br>禁止任何形式的倒卖或二次售卖，违者保留追究侵权责任的权利<br>修改及分发请保留作者信息并注明出处: <a href="https://github.com/huami1314/iFont" target="_blank">GitHub</a></div>
+    </div>
+    <div class="modal-footer">
+      <a class="qq-group" style="margin-right:auto" target="_blank" href="https://qm.qq.com/cgi-bin/qm/qr?k=tisF6ti3s-klQXOrtaGDcD81zhiQh4bh&jump_from=webapi&authKey=3fBYcNw/Vxs0UqD+mzGSGihMTSEjRnEkG8COta8xE6k0ip8pLhblOz64CEGBQo1o">加入 QQ 群</a>
+      <button class="modal-btn modal-btn-sec" id="notice-never-btn">不再提示</button>
+      <button class="modal-btn modal-btn-pri" id="notice-ok-btn">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><i class="fa-solid fa-check-circle"></i> <span id="toast-text"></span></div>
+
 <script>
+const noticeModal = document.getElementById('notice-modal');
+const noticeBtn = document.getElementById('notice-btn');
+const noticeOkBtn = document.getElementById('notice-ok-btn');
+const noticeNeverBtn = document.getElementById('notice-never-btn');
+const toast = document.getElementById('toast');
+const toastText = document.getElementById('toast-text');
+
+function showToast(msg) {
+  toastText.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function showNotice() { noticeModal.classList.add('show'); }
+function hideNotice() { noticeModal.classList.remove('show'); }
+
+noticeBtn.addEventListener('click', () => { noticeNeverBtn.style.display = 'none'; showNotice(); });
+noticeOkBtn.addEventListener('click', hideNotice);
+noticeNeverBtn.addEventListener('click', () => {
+  localStorage.setItem('iFont_hideNotice', '1');
+  hideNotice();
+  showToast('已不再自动提示，可在右上角重新打开');
+});
+
+if (!localStorage.getItem('iFont_hideNotice')) {
+  noticeNeverBtn.style.display = '';
+  setTimeout(showNotice, 500);
+}
+
 let srcFiles = [];
 let resultBlobs = [];
 let worker = null;
