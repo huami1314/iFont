@@ -510,8 +510,7 @@ setupDrop(srcBox, srcInput, async files => {
     rejected.forEach(n => addLog('err', `不支持的文件类型: ${n} (仅支持 TTF/OTF/TTC)`));
   }
   if (srcFiles.length) {
-    const ext = srcFiles[0].name.split('.').pop().toLowerCase();
-    const radio = document.querySelector(`input[name="output-format"][value="${ext === 'ttc' ? 'ttc' : 'ttf'}"]`);
+    const radio = document.querySelector('input[name="output-format"][value="ttc"]');
     if (radio) radio.checked = true;
   }
   renderPreviews();
