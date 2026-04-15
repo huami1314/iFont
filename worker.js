@@ -177,15 +177,14 @@ function modifyHhea(d, lineHeightOffset) {
 }
 
 function modifyHead(d, sizeOffset) {
-  if (!d || d.length < 20) return d;
+  if (!sizeOffset || !d || d.length < 20) return d;
   const c = new Uint8Array(d.length);
   c.set(d);
   const dv = new DataView(c.buffer);
+  const cur = dv.getUint16(18, false);
+  const next = Math.max(16, cur - sizeOffset);
+  dv.setUint16(18, next, false);
   dv.setUint32(8, 0, false);
-  if (sizeOffset) {
-    const cur = dv.getUint16(18, false);
-    dv.setUint16(18, Math.max(16, cur - sizeOffset), false);
-  }
   return c;
 }
 
@@ -439,7 +438,7 @@ function convertOne(sources, mode, offsets) {
         const key = `${srcId}:hhea:${lOff}`;
         if (!hheaCache.has(key)) hheaCache.set(key, modifyHhea(t.data, lOff));
         tables.push({ tag: 'hhea', data: hheaCache.get(key) });
-      } else if (t.tag === 'head') {
+      } else if (t.tag === 'head' && sOff) {
         const key = `${srcId}:head:${sOff}`;
         if (!headCache.has(key)) headCache.set(key, modifyHead(t.data, sOff));
         tables.push({ tag: 'head', data: headCache.get(key) });
