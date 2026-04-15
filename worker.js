@@ -148,25 +148,12 @@ function readFontMetrics(tables) {
   return m;
 }
 
-function scaleI16(dv, off, scale) { dv.setInt16(off, Math.round(dv.getInt16(off, false) * scale), false); }
-function scaleU16(dv, off, scale) { dv.setUint16(off, Math.max(0, Math.round(dv.getUint16(off, false) * scale)), false); }
-
-function modifyOS2(d, weight, fsType, lineHeightOffset, upmScale) {
+function modifyOS2(d, weight, fsType, lineHeightOffset) {
   const c = new Uint8Array(d.length);
   c.set(d);
   const dv = new DataView(c.buffer);
   writeU16(dv, 4, weight);
   writeU16(dv, 8, fsType);
-  if (upmScale !== 1) {
-    scaleI16(dv, 2, upmScale);
-    for (let p = 10; p <= 28; p += 2) scaleI16(dv, p, upmScale);
-    if (d.length >= 78) {
-      scaleI16(dv, 68, upmScale); scaleI16(dv, 70, upmScale); scaleI16(dv, 72, upmScale);
-      scaleU16(dv, 74, upmScale); scaleU16(dv, 76, upmScale);
-    }
-    const ver = dv.getUint16(0, false);
-    if (ver >= 2 && d.length >= 92) { scaleI16(dv, 88, upmScale); scaleI16(dv, 90, upmScale); }
-  }
   if (lineHeightOffset && d.length >= 78) {
     dv.setInt16(68, dv.getInt16(68, false) + lineHeightOffset, false);
     dv.setInt16(70, dv.getInt16(70, false) - lineHeightOffset, false);
@@ -177,32 +164,28 @@ function modifyOS2(d, weight, fsType, lineHeightOffset, upmScale) {
   return c;
 }
 
-function modifyHhea(d, lineHeightOffset, upmScale) {
-  if (!lineHeightOffset && upmScale === 1) return d;
+function modifyHhea(d, lineHeightOffset) {
+  if (!lineHeightOffset) return d;
   if (!d || d.length < 10) return d;
   const c = new Uint8Array(d.length);
   c.set(d);
   const dv = new DataView(c.buffer);
-  if (upmScale !== 1) {
-    scaleI16(dv, 4, upmScale); scaleI16(dv, 6, upmScale); scaleI16(dv, 8, upmScale);
-  }
-  if (lineHeightOffset) {
-    dv.setInt16(4, dv.getInt16(4, false) + lineHeightOffset, false);
-    dv.setInt16(6, dv.getInt16(6, false) - lineHeightOffset, false);
-    dv.setInt16(8, dv.getInt16(8, false) + lineHeightOffset, false);
-  }
+  dv.setInt16(4, dv.getInt16(4, false) + lineHeightOffset, false);
+  dv.setInt16(6, dv.getInt16(6, false) - lineHeightOffset, false);
+  dv.setInt16(8, dv.getInt16(8, false) + lineHeightOffset, false);
   return c;
 }
 
 function modifyHead(d, sizeOffset) {
-  if (!sizeOffset || !d || d.length < 20) return d;
+  if (!d || d.length < 20) return d;
   const c = new Uint8Array(d.length);
   c.set(d);
   const dv = new DataView(c.buffer);
-  const cur = dv.getUint16(18, false);
-  const next = Math.max(16, cur - sizeOffset);
-  dv.setUint16(18, next, false);
   dv.setUint32(8, 0, false);
+  if (sizeOffset) {
+    const cur = dv.getUint16(18, false);
+    dv.setUint16(18, Math.max(16, cur - sizeOffset), false);
+  }
   return c;
 }
 
@@ -438,16 +421,6 @@ function convertOne(sources, mode, offsets) {
   const os2Cache = new Map();
   const hheaCache = new Map();
   const headCache = new Map();
-  const upmScale = sOff ? (function() {
-    const first = sources.values().next().value;
-    const hd = first.tables.find(t => t.tag === 'head');
-    if (!hd || hd.data.length < 20) return 1;
-    const dv = new DataView(hd.data.buffer, hd.data.byteOffset, hd.data.byteLength);
-    const oldUPM = dv.getUint16(18, false);
-    const newUPM = Math.max(16, oldUPM - sOff);
-    return newUPM / oldUPM;
-  })() : 1;
-  if (sOff) log('info', `  UPM 缩放比: ${upmScale.toFixed(4)}`);
   for (let i = 0; i < TEMPLATES.length; i++) {
     const tpl = TEMPLATES[i];
     const nameData = base64ToUint8Array(tpl.nameB64);
@@ -459,14 +432,14 @@ function convertOne(sources, mode, offsets) {
         tables.push({ tag: 'name', data: nameData });
       } else if (t.tag === 'OS/2') {
         const w = Math.max(1, tpl.weightClass + wOff);
-        const key = `${srcId}:${w}:${tpl.fsType}:${lOff}:${sOff}`;
-        if (!os2Cache.has(key)) os2Cache.set(key, modifyOS2(t.data, w, tpl.fsType, lOff, upmScale));
+        const key = `${srcId}:${w}:${tpl.fsType}:${lOff}`;
+        if (!os2Cache.has(key)) os2Cache.set(key, modifyOS2(t.data, w, tpl.fsType, lOff));
         tables.push({ tag: 'OS/2', data: os2Cache.get(key) });
-      } else if (t.tag === 'hhea' && (lOff || upmScale !== 1)) {
-        const key = `${srcId}:hhea:${lOff}:${sOff}`;
-        if (!hheaCache.has(key)) hheaCache.set(key, modifyHhea(t.data, lOff, upmScale));
+      } else if (t.tag === 'hhea' && lOff) {
+        const key = `${srcId}:hhea:${lOff}`;
+        if (!hheaCache.has(key)) hheaCache.set(key, modifyHhea(t.data, lOff));
         tables.push({ tag: 'hhea', data: hheaCache.get(key) });
-      } else if (t.tag === 'head' && sOff) {
+      } else if (t.tag === 'head') {
         const key = `${srcId}:head:${sOff}`;
         if (!headCache.has(key)) headCache.set(key, modifyHead(t.data, sOff));
         tables.push({ tag: 'head', data: headCache.get(key) });
@@ -535,12 +508,6 @@ self.onmessage = function(e) {
           const seen = new Set();
           const uniqueSrcs = [];
           for (const [k, v] of sources) { if (!seen.has(v)) { seen.add(v); uniqueSrcs.push({ key: k, src: v }); } }
-          const upmS = sOff ? (function() {
-            const hd = uniqueSrcs[0].src.tables.find(t => t.tag === 'head');
-            if (!hd || hd.data.length < 20) return 1;
-            const d = new DataView(hd.data.buffer, hd.data.byteOffset, hd.data.byteLength);
-            return Math.max(16, d.getUint16(18, false) - sOff) / d.getUint16(18, false);
-          })() : 1;
           for (let ui = 0; ui < uniqueSrcs.length; ui++) {
             const { src } = uniqueSrcs[ui];
             const tables = src.tables.map(t => {
@@ -548,9 +515,9 @@ self.onmessage = function(e) {
                 const od = new DataView(t.data.buffer, t.data.byteOffset, t.data.byteLength);
                 const ow = od.getUint16(4, false);
                 const of2 = od.getUint16(8, false);
-                return { tag: 'OS/2', data: modifyOS2(t.data, Math.max(1, ow + wOff), of2, lOff, upmS) };
+                return { tag: 'OS/2', data: modifyOS2(t.data, Math.max(1, ow + wOff), of2, lOff) };
               }
-              if (t.tag === 'hhea') return { tag: 'hhea', data: modifyHhea(t.data, lOff, upmS) };
+              if (t.tag === 'hhea') return { tag: 'hhea', data: modifyHhea(t.data, lOff) };
               if (t.tag === 'head' && sOff) return { tag: 'head', data: modifyHead(t.data, sOff) };
               return t;
             });
