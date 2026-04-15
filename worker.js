@@ -427,6 +427,7 @@ function convertOne(sources, mode, offsets) {
     const srcId = src.tables.length;
     const tables = [];
     for (const t of src.tables) {
+      if (t.tag === 'STAT') continue;
       if (t.tag === 'name') {
         tables.push({ tag: 'name', data: nameData });
       } else if (t.tag === 'OS/2') {
